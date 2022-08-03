@@ -1,5 +1,6 @@
 from time import process_time
 from flask import Flask, render_template, request, flash, redirect, url_for
+from sqlalchemy import desc
 from models import db, Artist, Show, Venue
 from flask_migrate import Migrate
 from forms import *
@@ -50,7 +51,25 @@ app.jinja_env.filters['datetime'] = format_datetime
 
 @app.route('/')
 def index():
-    return render_template('pages/home.html')
+    artists = []
+    venues = []
+
+    try:
+        recently_listed_artists = Artist.query.order_by(
+            desc(Artist.created_at_timestamp)).limit(10).all()
+
+        recently_listed_venues = Venue.query.order_by(
+            desc(Venue.created_at_timestamp)).limit(10).all()
+
+        for artist in recently_listed_artists:
+            artists.append({"name": artist.name})
+
+        for venue in recently_listed_venues:
+            venues.append({"name": venue.name})
+    except:
+        flash("Failed to fetch data. The database might not be running")
+
+    return render_template('pages/home.html', artists=artists, venues=venues)
 
 
 #  Venues
@@ -200,7 +219,7 @@ def create_venue_submission():
             website_link=form.website_link.data,
             seeking_talent=form.seeking_talent.data,
             seeking_description=form.seeking_description.data,
-            genres=json.dumps(form.genres.data)
+            genres=form.genres.data
         )
         db.session.add(new_venue)
         db.session.commit()
@@ -214,7 +233,8 @@ def create_venue_submission():
               request.form['name'] + ' could not be listed.')
     finally:
         db.session.close()
-        return render_template('pages/home.html')
+        return redirect(url_for('index'))
+        # return render_template('pages/home.html')
 
 
 @app.route('/venues/<venue_id>/delete', methods=['GET'])
@@ -231,7 +251,7 @@ def delete_venue(venue_id):
             f"An error occured. Could not delete the venue with the id : {venue_id}")
     finally:
         db.session.close()
-        return render_template('pages/home.html')
+        return redirect(url_for('index'))
 
 #  Artists
 #  ----------------------------------------------------------------
@@ -324,7 +344,7 @@ def show_artist(artist_id):
     except:
         flash(
             f"Could not fetch artist's informations, the database might not be running or an artist with the id {artist_id} doesn't exit.")
-        return render_template('pages/home.html')
+        return redirect(url_for('index'))
 
     return render_template('pages/show_artist.html', artist=data)
 
@@ -354,7 +374,7 @@ def edit_artist(artist_id):
         flash(
             f"Cannot edit the artist with the id : {artist_id}. The databse might not be running or such an Artist doesn't exist.")
 
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
@@ -373,7 +393,7 @@ def edit_artist_submission(artist_id):
         flash(f"Failed to update the artist {form.name.data}")
     finally:
         db.session.close
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
@@ -399,7 +419,7 @@ def edit_venue(venue_id):
         flash(
             f"Cannot edit the venue with the id : {venue_id}. The databse might not be running or such an Venue doesn't exist.")
 
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
@@ -458,7 +478,7 @@ def create_artist_submission():
         db.session.rollback()
     finally:
         db.session.close()
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 
 #  Shows
@@ -508,7 +528,7 @@ def create_show_submission():
         flash('An error occurred. Show could not be listed. This might be due to invalid IDs of Artist or Venue')
     finally:
         db.session.close()
-        return render_template('pages/home.html')
+        return redirect(url_for('index'))
 
 
 @ app.errorhandler(404)

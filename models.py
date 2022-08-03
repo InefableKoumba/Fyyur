@@ -1,6 +1,5 @@
-
+from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
-
 
 db = SQLAlchemy()
 
@@ -21,6 +20,8 @@ class Venue(db.Model):
     seeking_description = db.Column(db.String, nullable=True)
     genres = db.Column(db.String, nullable=False)
     shows = db.relationship("Show", backref="Venue")
+    created_at_timestamp = db.Column(
+        db.Float, default=datetime.timestamp(datetime.now()))
 
     def __repr__(self):
         return f'<Venue (name : {self.name})>'
@@ -42,6 +43,8 @@ class Artist(db.Model):
     seeking_description = db.Column(db.String, nullable=True)
     genres = db.Column(db.String, nullable=False)
     shows = db.relationship("Show", backref="Artist")
+    created_at_timestamp = db.Column(
+        db.Float, default=datetime.timestamp(datetime.now()))
 
     def __repr__(self):
         return f'<Artist (name : {self.name})>'
