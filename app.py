@@ -188,8 +188,7 @@ def show_venue(venue_id):
             "past_shows_count": len(venue_past_shows),
             "upcoming_shows_count": len(venue_upcoming_shows),
         }
-    except Exception as e:
-        print(e)
+    except:
         flash('Could not fetch the venue, the database might not be running.')
     finally:
         return render_template('pages/show_venue.html', venue=data)
@@ -253,8 +252,7 @@ def delete_venue(venue_id):
         db.session.commit()
         flash(
             f"The venue {venue.name} has been deleted from the database")
-    except Exception as e:
-        print(e)
+    except:
         db.session.rollback()
         flash(
             f"An error occured. Could not delete the venue with the id : {venue_id}")
@@ -380,8 +378,7 @@ def edit_artist(artist_id):
                 }
         form = ArtistForm(data=data)
         return render_template('forms/edit_artist.html', form=form, artist=artist)
-    except Exception as e:
-        print(e)
+    except:
         flash(
             f"Could edit the artist with the id : {artist_id}. The databse might not be running or such an Artist doesn't exist.")
 
@@ -401,8 +398,7 @@ def edit_artist_submission(artist_id):
         )
         db.session.commit()
         return redirect(url_for('show_artist', artist_id=artist_id))
-    except Exception as e:
-        print(e)
+    except:
         db.session.rollback()
         flash(f"Failed to update the artist {form.name.data}")
     finally:
