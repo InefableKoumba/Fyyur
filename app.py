@@ -96,7 +96,8 @@ def venues():
 
         for location in locations:
             venues = Venue.query.filter_by(
-                city=location[0], state=location[1])
+                city=location[0], state=location[1]).all()
+
             formated_venues = []
             for venue in venues:
                 formated_venues.append(
@@ -187,7 +188,8 @@ def show_venue(venue_id):
             "past_shows_count": len(venue_past_shows),
             "upcoming_shows_count": len(venue_upcoming_shows),
         }
-    except:
+    except Exception as e:
+        print(e)
         flash('Could not fetch the venue, the database might not be running.')
     finally:
         return render_template('pages/show_venue.html', venue=data)
@@ -241,11 +243,18 @@ def create_venue_submission():
 def delete_venue(venue_id):
     try:
         venue = Venue.query.get(venue_id)
+        shows = Show.query.filter_by(venue_id=venue_id).all()
+
+        if len(shows) > 0:
+            flash(
+                f"The venue {venue.name} cannot be deleted, there's at least one Show that depends on this Venue stored in the database")
+            return redirect("index")
         db.session.delete(venue)
         db.session.commit()
         flash(
             f"The venue {venue.name} has been deleted from the database")
-    except:
+    except Exception as e:
+        print(e)
         db.session.rollback()
         flash(
             f"An error occured. Could not delete the venue with the id : {venue_id}")
@@ -366,13 +375,15 @@ def edit_artist(artist_id):
                 "facebook_link": artist.facebook_link,
                 "seeking_venue": artist.seeking_venue,
                 "seeking_description": artist.seeking_description,
-                "image_link": artist.image_link
+                "image_link": artist.image_link,
+                "availability_hours_24_format": json.loads(artist.availability_hours_24_format)
                 }
         form = ArtistForm(data=data)
         return render_template('forms/edit_artist.html', form=form, artist=artist)
-    except:
+    except Exception as e:
+        print(e)
         flash(
-            f"Cannot edit the artist with the id : {artist_id}. The databse might not be running or such an Artist doesn't exist.")
+            f"Could edit the artist with the id : {artist_id}. The databse might not be running or such an Artist doesn't exist.")
 
     return redirect(url_for('index'))
 
@@ -381,6 +392,8 @@ def edit_artist(artist_id):
 def edit_artist_submission(artist_id):
     form = ArtistForm(request.form)
     form.genres.data = json.dumps(request.form.getlist("genres"))
+    form.availability_hours_24_format.data = json.dumps(
+        request.form.getlist("availability_hours_24_format"))
     try:
         db.session.query(Artist).filter(
             Artist.id == artist_id).update(
@@ -388,7 +401,8 @@ def edit_artist_submission(artist_id):
         )
         db.session.commit()
         return redirect(url_for('show_artist', artist_id=artist_id))
-    except:
+    except Exception as e:
+        print(e)
         db.session.rollback()
         flash(f"Failed to update the artist {form.name.data}")
     finally:
@@ -454,22 +468,24 @@ def create_artist_form():
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
 
-    artist = ArtistForm(data=request.form)
+    form = ArtistForm(data=request.form)
     try:
-        new_artist = Artist(
-            name=artist.name.data,
-            city=artist.city.data,
-            state=artist.state.data,
-            phone=artist.phone.data,
-            image_link=artist.image_link.data,
-            facebook_link=artist.facebook_link.data,
-            website_link=artist.website_link.data,
-            seeking_venue=artist.seeking_venue.data,
-            seeking_description=artist.seeking_description.data,
-            genres=json.dumps(request.form.getlist("genres"))
+        artist = Artist(
+            name=form.name.data,
+            city=form.city.data,
+            state=form.state.data,
+            phone=form.phone.data,
+            image_link=form.image_link.data,
+            facebook_link=form.facebook_link.data,
+            website_link=form.website_link.data,
+            seeking_venue=form.seeking_venue.data,
+            seeking_description=form.seeking_description.data,
+            genres=json.dumps(request.form.getlist("genres")),
+            availability_hours_24_format=json.dumps(
+                request.form.getlist("availability_hours_24_format"))
         )
 
-        db.session.add(new_artist)
+        db.session.add(artist)
         db.session.commit()
         flash('Artist ' + request.form['name'] + ' was successfully listed!')
     except:
@@ -491,7 +507,7 @@ def shows():
         shows = Show.query.all()
         for show in shows:
             data.append({
-                "venue_id": 1,
+                "venue_id": show.venue_id,
                 "venue_name": show.Venue.name,
                 "artist_id": show.Artist.id,
                 "artist_name": show.Artist.name,
@@ -515,6 +531,14 @@ def create_shows():
 def create_show_submission():
     form = ShowForm(request.form)
     try:
+        # Check if artist is available by the time chose
+        artist = Artist.query.get(form.artist_id.data)
+        for hour in json.loads(artist.availability_hours_24_format):
+            if int(hour) == form.start_time.data.hour:
+                flash(
+                    f"The artist {artist.name} is not available at this time.")
+                return redirect(url_for('create_shows'))
+
         new_show = Show(
             artist_id=form.artist_id.data,
             venue_id=form.venue_id.data,
@@ -525,10 +549,11 @@ def create_show_submission():
         flash('Show was successfully listed!')
     except:
         db.session.rollback()
-        flash('An error occurred. Show could not be listed. This might be due to invalid IDs of Artist or Venue')
-    finally:
         db.session.close()
-        return redirect(url_for('index'))
+        flash('An error occurred. Show could not be listed. This might be due to invalid Artist and Venue IDs or Start Time.')
+        return redirect(url_for('create_shows'))
+
+    return redirect(url_for('index'))
 
 
 @ app.errorhandler(404)

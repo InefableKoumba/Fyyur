@@ -35,7 +35,7 @@ class Artist(db.Model):
     city = db.Column(db.String(120))
     state = db.Column(db.String(120))
     phone = db.Column(db.String(120), nullable=False)
-    genres = db.Column(db.String(120))
+    genres = db.Column(db.String(200))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
     website_link = db.Column(db.String(120))
@@ -45,6 +45,7 @@ class Artist(db.Model):
     shows = db.relationship("Show", backref="Artist")
     created_at_timestamp = db.Column(
         db.Float, default=datetime.timestamp(datetime.now()))
+    availability_hours_24_format = db.Column(db.String(200))
 
     def __repr__(self):
         return f'<Artist (name : {self.name})>'
