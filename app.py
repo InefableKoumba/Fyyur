@@ -1,4 +1,3 @@
-from time import process_time
 from flask import Flask, render_template, request, flash, redirect, url_for
 from sqlalchemy import desc
 from models import db, Artist, Show, Venue
@@ -11,8 +10,9 @@ from flask_moment import Moment
 import babel
 from datetime import datetime
 from dateutil import parser
+import phonenumbers
 import json
-import flask_wtf
+import re
 import collections
 collections.Callable = collections.abc.Callable
 
@@ -79,15 +79,8 @@ def index():
 def venues():
     data = []
     try:
-        venues = Venue.query.all()
-
-        # We use a set to unsure that the same location will be considered only once
-        # e.g: locations = {
-        #   ("San Francisco", "CA"),
-        #   ("New York", "NY")
-        # }
         locations_set = set()
-
+        venues = Venue.query.distinct(Venue.state, Venue.city).all()
         # Get all states and cities of all venues stored in the database
         for venue in venues:
             locations_set.add((venue.city, venue.state))
@@ -154,22 +147,25 @@ def show_venue(venue_id):
         venue_upcoming_shows = []
         venue_past_shows = []
 
-        for show in venue.shows:
-            artist = show.Artist
-            if datetime.today() < datetime.strptime(show.start_time, "%Y-%m-%d %H:%M:%S"):
+        shows_query = db.session.query(Show).join(
+            Venue).filter(Show.venue_id == venue_id).all()
+
+        for show in shows_query:
+            if datetime.strptime(show.start_time, "%Y-%m-%d %H:%M:%S") > datetime.now():
                 venue_upcoming_shows.append({
-                    "artist_id": artist.id,
-                    "artist_name": artist.name,
-                    "artist_image_link": artist.image_link,
+                    "artist_id": show.artist_id,
+                    "artist_name": show.Artist.name,
+                    "artist_image_link": show.Artist.image_link,
                     "start_time": show.start_time
                 })
             else:
-                venue_past_shows.append({
-                    "artist_id": artist.id,
-                    "artist_name": artist.name,
-                    "artist_image_link": artist.image_link,
+                venue_upcoming_shows.append({
+                    "artist_id": show.artist_id,
+                    "artist_name": show.Artist.name,
+                    "artist_image_link": show.Artist.image_link,
                     "start_time": show.start_time
                 })
+
         data = {
             "id": venue.id,
             "name": venue.name,
@@ -188,7 +184,8 @@ def show_venue(venue_id):
             "past_shows_count": len(venue_past_shows),
             "upcoming_shows_count": len(venue_upcoming_shows),
         }
-    except:
+    except Exception as e:
+        print(e)
         flash('Could not fetch the venue, the database might not be running.')
     finally:
         return render_template('pages/show_venue.html', venue=data)
@@ -465,6 +462,27 @@ def create_artist_form():
 def create_artist_submission():
 
     form = ArtistForm(data=request.form)
+
+    # Check if the phone number is valid
+    if len(form.phone.data) > 16 or re.search('[a-zA-Z]', form.phone.data):
+        flash("The phone number is invalid")
+        return render_template('forms/new_artist.html', form=form)
+    try:
+        input_number = phonenumbers.parse(form.phone.data, None)
+        if not (phonenumbers.is_valid_number(input_number)):
+            flash("The phone number is invalid")
+            return render_template('forms/new_artist.html', form=form)
+    except:
+        flash("The phone number is invalid")
+        return render_template('forms/new_artist.html', form=form)
+
+    # Check if the phone number is already taken
+    artists = Artist.query.filter_by(phone=form.phone.data).all()
+    if artists:
+        flash(f"The phone number {form.phone.data} is already taken")
+        return render_template('forms/new_artist.html', form=form)
+
+    # Try to create an new Artist in the database
     try:
         artist = Artist(
             name=form.name.data,
